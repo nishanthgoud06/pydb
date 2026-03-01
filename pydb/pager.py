@@ -100,7 +100,18 @@ class Table:
 
     def __init__(self, pager: Pager):
         self.pager = pager
-        self.num_rows = 0
+        self.meta_file = pager.filepath + ".meta"
+
+        # Load num_rows from meta file if it exists
+        if os.path.exists(self.meta_file):
+            with open(self.meta_file, "r") as f:
+                self.num_rows = int(f.read().strip())
+        else:
+            self.num_rows = 0
+
+    def _save_meta(self):
+        with open(self.meta_file, "w") as f:
+            f.write(str(self.num_rows))
 
     def row_slot(self, row_num: int):
         """
@@ -110,23 +121,23 @@ class Table:
         rows_per_page = PAGE_SIZE // ROW_SIZE
         page_num = row_num // rows_per_page
         row_offset = (row_num % rows_per_page) * ROW_SIZE
-
         page = self.pager.get_page(page_num)
         return page, row_offset
 
     def insert(self, row: Row):
         page, offset = self.row_slot(self.num_rows)
         row_bytes = row.to_bytes()
-        page[offset : offset + ROW_SIZE] = row_bytes
+        page[offset: offset + ROW_SIZE] = row_bytes
         self.pager.write_page(
             self.num_rows // (PAGE_SIZE // ROW_SIZE), page
         )
         self.num_rows += 1
+        self._save_meta()  # persist num_rows after every insert
 
     def select(self) -> list:
         rows = []
         for i in range(self.num_rows):
             page, offset = self.row_slot(i)
-            row = Row.from_bytes(page[offset : offset + ROW_SIZE])
+            row = Row.from_bytes(page[offset: offset + ROW_SIZE])
             rows.append(row)
         return rows
